@@ -1,5 +1,5 @@
-# ⚡ FlashMind — AI Flashcard Bot
-Turn any PDF into interactive flashcards and quizzes — directly from Telegram using unlimited free AI prompts via OpenRouter.
+# ⚡ FlashMind AI Flashcard Bot
+Turn any PDF into interactive flashcards and quizzes directly from Telegram using unlimited free AI prompts via OpenRouter.
 
 ---
 
@@ -7,7 +7,7 @@ Turn any PDF into interactive flashcards and quizzes — directly from Telegram 
 
 **FlashMind** is an AI-powered Telegram bot that converts uploaded PDF files into **multiple-choice flashcards** and interactive quizzes.
 
-It uses **n8n** as the automation brain, **OpenRouter** for free AI inference, and a custom **HTML/JS quiz engine** for delivery — all without any external backend or paid API costs.
+It uses **n8n** as the automation brain, **OpenRouter** for free AI inference, and a custom **HTML/JS quiz engine** for delivery all without any external backend or paid API costs.
 
 ---
 > ⚠️ **Note:**  
