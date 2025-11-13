@@ -15,10 +15,11 @@ It uses **n8n** as the automation brain, **OpenRouter** for free AI inference, a
 ## 🏗️ Architecture
 
 ```mermaid
-flowchart LR
-    A[📤 Telegram User Uploads PDF] --> B[🤖 n8n Telegram Trigger]
-    B --> C[📄 Extract from File Node]
-    C --> D[🧠 AI Agent (LangChain + OpenRouter)]
-    D --> E[💾 JSON Validation + Retry Logic]
-    E --> F[🎨 Code Node: Builds Interactive HTML Flashcards]
-    F --> G[📬 Telegram Sends Flashcards Back to User]
+flowchart TB
+    A[Telegram User Uploads PDF] --> B[n8n Telegram Trigger]
+    B --> C[Extract From File Node]
+    C --> D[AI Agent using LangChain and OpenRouter]
+    D --> E[JSON Validation and Retry Logic]
+    E --> F[Code Node - Builds Interactive HTML Flashcards]
+    F --> G[Telegram Sends Flashcards Back to User]
+```
