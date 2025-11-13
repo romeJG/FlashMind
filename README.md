@@ -13,6 +13,7 @@ It uses **n8n** as the automation brain, **OpenRouter** for free AI inference, a
 > ⚠️ **Note:**  
 > This project is fully functional but currently **not operational** since it depends on my local **n8n instance** being online.  
 > You can still explore the workflow JSON, screenshots, architecture, and code to see how it all works end-to-end.
+> Future implementation upcomming! ill be putting this as a web app in my vps to keep it up always!!!
 ---
 
 ## 📸 Screenshots
