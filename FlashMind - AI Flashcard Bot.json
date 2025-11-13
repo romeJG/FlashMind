@@ -1,0 +1,226 @@
+{
+  "name": "FlashMind - AI Flashcard Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=You are an assistant that extracts educational content from a PDF and converts it into flashcard-style Q&A. Give about not lessthan 10 Q&A you decide how many is enough.\n\nInstructions:\n1. Read the provided text carefully.\n2. Generate flashcards with:\n   - \"question\": a concise question under 100 characters.\n   - \"choices\": 3–4 possible answers (each < 75 characters).\n   - \"correct_index\": the index of the correct answer.\n3. Output ONLY valid JSON. Do not add any explanations, code fences, markdown formatting, or extra text.\n4. The JSON must be in this array format:\n[\n  {\n    \"question\": \"...\",\n    \"choices\": [\"...\", \"...\", \"...\", \"...\"],\n    \"correct_index\": 0,\n    \"why\": \"Short explanation of why this is correct.\"\n  },\n  ...\n]\n5. Focus only on key facts, concepts, or definitions in the text.\n",
+          "enableStreaming": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -32
+      ],
+      "id": "4abc1265-7f86-4c3a-8de9-061f95960d8d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "moonshotai/kimi-k2:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        304,
+        192
+      ],
+      "id": "307d4c6c-745d-485f-a56b-477ef0f13880",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "xxxxxx",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -32
+      ],
+      "id": "dc2a605b-7393-4df8-899e-5463b2469100",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- INPUT HANDLING ----------------------------------------------------------\nfunction coerceFlashcards(input) {\n  if (!input) throw new Error(\"No input found.\");\n\n  if (typeof input.output === 'string') {\n    let s = input.output.trim();\n    s = s.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '');\n    return JSON.parse(s);\n  }\n\n  if (typeof input === 'string') {\n    let s = input.trim().replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '');\n    return JSON.parse(s);\n  }\n\n  if (Array.isArray(input)) return input;\n\n  if (Array.isArray(input.flashcards)) return input.flashcards;\n\n  throw new Error(\"Could not find flashcards array. Provide a JSON array of cards.\");\n}\n\nconst first = $input.first();\nconst payload = first?.json ?? {};\nconst flashcards = coerceFlashcards(payload);\n\nconst SHOW_HINTS = false;\n\n// --- HTML TEMPLATE -----------------------------------------------------------\nfunction escapeHtml(s) {\n  return String(s)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\");\n}\n\nconst html = `<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\"/>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n<title>Interactive Flashcards</title>\n<style>\n  :root {\n    --bg: #ffffff;\n    --card: #f8f9fa;\n    --accent: #0d6efd;\n    --muted: #6c757d;\n    --text: #212529;\n    --good: #198754;\n    --bad: #dc3545;\n  }\n  html, body { height: 100%; }\n  body {\n    margin: 0;\n    background: var(--bg);\n    color: var(--text);\n    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, \"Noto Sans\", sans-serif;\n    display: grid;\n    grid-template-rows: auto 1fr auto;\n  }\n  header, footer {\n    padding: 12px 16px;\n    border-bottom: 1px solid #dee2e6;\n  }\n  footer { border-top: 1px solid #dee2e6; border-bottom: 0; }\n  .wrap {\n    max-width: 900px;\n    width: 100%;\n    margin: 0 auto;\n  }\n  .controls {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    flex-wrap: wrap;\n  }\n  .controls button, .controls select {\n    background: var(--card);\n    color: var(--text);\n    border: 1px solid #ced4da;\n    border-radius: 12px;\n    padding: 10px 14px;\n    cursor: pointer;\n  }\n  .controls button:hover { border-color: var(--accent); }\n  .pill {\n    background: #e9ecef;\n    padding: 6px 10px;\n    border-radius: 999px;\n    color: var(--muted);\n    font-size: 13px;\n  }\n  .stage {\n    display: grid;\n    place-items: center;\n    padding: 24px 12px;\n  }\n  .card {\n    width: min(760px, 92vw);\n    min-height: 360px;\n    perspective: 1200px;\n  }\n  .inner {\n    position: relative;\n    width: 100%;\n    min-height: 360px;\n    transition: transform 0.6s;\n    transform-style: preserve-3d;\n  }\n  .inner.flipped { transform: rotateY(180deg); }\n  .face {\n    background: var(--card);\n    border: 1px solid #ced4da;\n    border-radius: 20px;\n    box-shadow: 0 12px 30px rgba(0,0,0,0.1);\n    padding: 24px 28px;\n    position: absolute;\n    inset: 0;\n    backface-visibility: hidden;\n    display: grid;\n    gap: 16px;\n    align-content: start;\n  }\n  .back {\n    transform: rotateY(180deg);\n    display: grid;\n    place-content: center;\n    gap: 12px;\n  }\n  h2 {\n    margin: 8px 0 4px;\n    font-size: clamp(20px, 2.8vw, 28px);\n  }\n  ul {\n    list-style: none;\n    padding: 0;\n    margin: 0;\n    display: grid;\n    gap: 10px;\n  }\n  li {\n    border: 1px solid #ced4da;\n    border-radius: 12px;\n    padding: 12px 14px;\n    font-size: 15px;\n    cursor: pointer;\n    transition: background 0.2s;\n  }\n  li:hover {\n    background: #e9ecef;\n  }\n  li.correct {\n    background: #d4edda;\n    border-color: var(--good);\n    color: var(--good);\n  }\n  li.incorrect {\n    background: #f8d7da;\n    border-color: var(--bad);\n    color: var(--bad);\n  }\n  .hint {\n    color: var(--muted);\n    font-size: 14px;\n  }\n  .answer-pill {\n    display: inline-block;\n    background: #d4edda;\n    color: var(--good);\n    border: 1px solid #badbcc;\n    padding: 8px 12px;\n    border-radius: 999px;\n    font-weight: 600;\n    font-size: 15px;\n  }\n  .why {\n    color: var(--text);\n    font-size: 14px;\n    line-height: 1.6;\n    max-width: 90%;\n    margin: 0 auto;\n    text-align: center;\n  }\n  .toolbar {\n    display: flex;\n    justify-content: center;\n    gap: 8px;\n    padding: 12px 0 28px;\n  }\n  .toolbar button {\n    background: var(--card);\n    color: var(--text);\n    border: 1px solid #ced4da;\n    border-radius: 12px;\n    padding: 12px 16px;\n    cursor: pointer;\n    min-width: 110px;\n  }\n  .toolbar button:hover { border-color: var(--accent); }\n  .progress {\n    text-align: center;\n    color: var(--muted);\n    font-size: 14px;\n  }\n</style>\n</head>\n<body>\n  <header>\n    <div class=\"wrap controls\">\n      \n      <button id=\"shuffleBtn\">Shuffle</button>\n      <span class=\"pill\" id=\"counter\">1 / ${flashcards.length}</span>\n    </div>\n  </header>\n\n  <main class=\"stage\">\n    <div class=\"card\" aria-live=\"polite\">\n      <div class=\"inner\" id=\"inner\">\n        <section class=\"face front\" id=\"front\"></section>\n        <section class=\"face back\" id=\"back\"></section>\n      </div>\n    </div>\n    <div class=\"toolbar\">\n      <button id=\"prevBtn\" aria-label=\"Previous (←)\">← Prev</button>\n      <button id=\"flipBtn\" aria-label=\"Flip (Space)\">Flip</button>\n      <button id=\"nextBtn\" aria-label=\"Next (→)\">Next →</button>\n    </div>\n    <div class=\"progress\" id=\"progress\"></div>\n  </main>\n\n  <footer>\n    <div class=\"wrap\">Tip: Use ← → to navigate, Space to flip, S to shuffle, or click choices.</div>\n  </footer>\n\n<script>\n(function(){\n  const raw = ${JSON.stringify(flashcards)};\n  let cards = raw.slice();\n  let idx = 0;\n  const inner = document.getElementById('inner');\n  const front = document.getElementById('front');\n  const back  = document.getElementById('back');\n  const counter = document.getElementById('counter');\n  const progress = document.getElementById('progress');\n\n  function render(i){\n    const c = cards[i];\n    if(!c) return;\n\n    // FRONT\n    front.innerHTML = \"\";\n    const h2 = document.createElement('h2');\n    h2.textContent = c.question || \"Untitled\";\n    front.appendChild(h2);\n\n    if (Array.isArray(c.choices) && c.choices.length) {\n      const ul = document.createElement('ul');\n      c.choices.forEach((ch, j) => {\n        const li = document.createElement('li');\n        li.textContent = (j+1) + \". \" + ch;\n        li.addEventListener('click', () => {\n          if (j === c.correct_index) {\n            li.classList.add('correct');\n            setTimeout(() => inner.classList.add('flipped'), 300);\n          } else {\n            li.classList.add('incorrect');\n          }\n        });\n        ul.appendChild(li);\n      });\n      front.appendChild(ul);\n    }\n\n    // (Optional) hint\n    ${SHOW_HINTS ? `if (c.hint) {\n      const hint = document.createElement('div');\n      hint.className = 'hint';\n      hint.textContent = 'Hint: ' + c.hint;\n      front.appendChild(hint);\n    }` : ''}\n\n    // BACK\n    back.innerHTML = \"\";\n    const ans = document.createElement('div');\n    ans.className = 'answer-pill';\n    const label = document.createElement('span');\n    const answerTxt = Array.isArray(c.choices) && typeof c.correct_index === 'number'\n      ? c.choices[c.correct_index]\n      : (c.answer || \"No answer\");\n    label.textContent = 'Answer: ' + answerTxt;\n    ans.appendChild(label);\n    back.appendChild(ans);\n\n    if (c.why) {\n      const why = document.createElement('div');\n      why.className = 'why';\n      why.textContent = c.why;\n      back.appendChild(why);\n    }\n\n    // UI\n    counter.textContent = (i+1) + ' / ' + cards.length;\n    progress.textContent = 'Card ' + (i+1) + ' of ' + cards.length;\n    inner.classList.remove('flipped');\n  }\n\n  function next(){ idx = (idx + 1) % cards.length; render(idx); }\n  function prev(){ idx = (idx - 1 + cards.length) % cards.length; render(idx); }\n  function flip(){ inner.classList.toggle('flipped'); }\n  function shuffle(){\n    for (let i = cards.length - 1; i > 0; i--) {\n      const j = Math.floor(Math.random() * (i + 1));\n      [cards[i], cards[j]] = [cards[j], cards[i]];\n    }\n    idx = 0; render(idx);\n  }\n\n  document.getElementById('nextBtn').addEventListener('click', next);\n  document.getElementById('prevBtn').addEventListener('click', prev);\n  document.getElementById('flipBtn').addEventListener('click', flip);\n  document.getElementById('revealBtn').addEventListener('click', flip);\n  document.getElementById('shuffleBtn').addEventListener('click', shuffle);\n\n  window.addEventListener('keydown', (e) => {\n    if (e.key === 'ArrowRight') next();\n    else if (e.key === 'ArrowLeft') prev();\n    else if (e.code === 'Space') { e.preventDefault(); flip(); }\n    else if (e.key.toLowerCase() === 's') shuffle();\n  });\n\n  render(idx);\n})();\n</script>\n</body>\n</html>`;\n\n// --- RETURN AS BINARY HTML ---------------------------------------------------\nconst data = Buffer.from(html, 'utf8');\nreturn [\n  {\n    json: { fileName: \"flashcards.html\", mimeType: \"text/html\" },\n    binary: {\n      data: {\n        data: data.toString('base64'),\n        fileName: `flashcards.html`,\n        mimeType: \"text/html\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        0
+      ],
+      "id": "4613ef42-9fb3-44a1-b8f2-0fd36929e6ac",
+      "name": "Convert raw output to flashcards"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true
+        }
+      },
+      "id": "cc8733da-15b4-4c43-bbb4-c34eadb3aad9",
+      "name": "Listen for incoming events",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [
+        -128,
+        -16
+      ],
+      "webhookId": "ceeca549-b51b-48c7-a649-b27a126b4fe1",
+      "typeVersion": 1,
+      "credentials": {
+        "telegramApi": {
+          "id": "xxxxxx",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $('Listen for incoming events').first().json.message.from.id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "3f405a11-24ab-4d98-abc6-a31902dd87c2",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        1136,
+        -80
+      ],
+      "typeVersion": 1.1,
+      "webhookId": "014066e3-18b0-41cc-a9f5-6e8bcb431a9a",
+      "credentials": {
+        "telegramApi": {
+          "id": "YPAxY38l76AMd5uc",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Listen for incoming events').first().json.message.from.id }}",
+        "text": "Please wait, while I make your flashcards 🤗",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "6706cbbc-8315-4643-a872-bc15b7a38bd9",
+      "name": "Telegram1",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        272,
+        -128
+      ],
+      "typeVersion": 1.1,
+      "webhookId": "68dfe653-679e-4dfe-af3e-388e4ef06f3c",
+      "credentials": {
+        "telegramApi": {
+          "id": "YPAxY38l76AMd5uc",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Convert raw output to flashcards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listen for incoming events": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert raw output to flashcards": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "078d321d-37b4-4511-9922-3e94b6ff8592",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8bdf2186be175b6a218f3308fd9c506a6139fed35dd2b669b9dae47f83a0be52"
+  },
+  "id": "7XAzVPSao4mhQYWO",
+  "tags": []
+}
